@@ -1,0 +1,12 @@
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: saas-next
+subjects:
+  - kind: ServiceAccount
+    name: saas-next
+    namespace: saas-control-plane
+roleRef:
+  kind: ClusterRole
+  name: saas-next
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,140 @@
+DOCKER_REGISTRY?=quay.io
+DOCKER_REPOSITORY?=matousjobanek
+DOCKER_REPO?=$(DOCKER_REGISTRY)/$(DOCKER_REPOSITORY)
+IMAGE_NAME?=saas-next
+SHORT_COMMIT=$(shell git rev-parse --short HEAD)
+ifneq ($(GITUNTRACKEDCHANGES),)
+SHORT_COMMIT := $(SHORT_COMMIT)-dirty
+endif
+
+TIMESTAMP:=$(shell date +%s)
+TAG?=$(SHORT_COMMIT)-$(TIMESTAMP)
+
+NAMESPACE_NAME?=saas-control-plane
+
+DEPLOY_DIR:=deploy
+
+.PHONY: deploy-crds
+deploy-crds:
+	@echo "Creating sub resources..."
+	@echo "Creating CRDs..."
+	@oc apply -f $(DEPLOY_DIR)/crds/saas_v1alpha1_clusterconfig_crd.yaml
+	@oc apply -f $(DEPLOY_DIR)/crds/saas_v1alpha1_saasnamespace_crd.yaml
+	@oc apply -f $(DEPLOY_DIR)/crds/saas_v1alpha1_saasuser_crd.yaml
+
+.PHONY: login-as-admin
+login-as-admin:
+	@echo "Logging using system:admin..."
+	@oc login -u system:admin
+
+.PHONY: deploy-rbac
+deploy-rbac:
+	@echo "Creating cluster Role"
+	@oc apply -f $(DEPLOY_DIR)/role.yaml
+	@echo "Creating cluster RoleBinding"
+	@oc apply -f $(DEPLOY_DIR)/role_binding.yaml
+
+.PHONY: create-namespace
+create-namespace:
+	@echo "Creating Namespace"
+	@oc apply -f $(DEPLOY_DIR)/namespace.yaml
+	@echo "Switching to the namespace $(NAMESPACE_NAME)"
+	@oc project $(NAMESPACE_NAME)
+
+.PHONY: create-sa
+create-sa:
+	@echo "Creating ServiceAccount"
+	@oc create -f $(DEPLOY_DIR)/service_account.yaml
+
+.PHONY: create-resources
+create-resources: login-as-admin deploy-crds create-namespace deploy-rbac create-sa
+
+.PHONY: prepare-host
+prepare-host: set-profile-to-host create-resources
+
+.PHONY: prepare-member
+prepare-member: set-profile-to-member login-as-admin
+	@echo "Preparing member"
+	@./prepare-member.sh
+
+.PHONY: build-image
+build-image:
+	docker build -t $(DOCKER_REPO)/$(IMAGE_NAME):$(TAG) -f Dockerfile.dev .
+	docker tag $(DOCKER_REPO)/$(IMAGE_NAME):$(TAG) $(DOCKER_REPO)/$(IMAGE_NAME):test
+	docker push $(DOCKER_REPO)/$(IMAGE_NAME):$(TAG)
+
+.PHONY: deploy-operator-only
+deploy-operator-only:
+	@echo "Switching to the namespace $(NAMESPACE_NAME)"
+	@oc project $(NAMESPACE_NAME)
+	@echo "Creating GitSource Operator"
+	@cat $(DEPLOY_DIR)/operator.yaml | sed 's/REPLACE_IMAGE/$(DOCKER_REGISTRY)\/$(DOCKER_REPOSITORY)\/$(IMAGE_NAME):$(TAG)/' | oc apply -f -
+
+
+.PHONY: clean-operator-only
+clean-operator-only:
+	@echo "Switching to the namespace $(NAMESPACE_NAME)"
+	@oc project $(NAMESPACE_NAME)
+	@echo "Creating GitSource Operator"
+	@cat $(DEPLOY_DIR)/operator.yaml | sed 's/REPLACE_IMAGE/$(DOCKER_REGISTRY)\/$(DOCKER_REPOSITORY)\/$(IMAGE_NAME):$(TAG)/' | oc delete -f -
+
+.PHONY: set-profile-to-host
+set-profile-to-host:
+	@minishift profile set host
+
+.PHONY: switch-to-host
+switch-to-host: set-profile-to-host login-as-admin
+	@echo "Switching to the namespace $(NAMESPACE_NAME)"
+	@oc project $(NAMESPACE_NAME)
+	@touch $(DEPLOY_DIR)/operator.yaml
+
+.PHONY: set-profile-to-member
+set-profile-to-member:
+	@minishift profile set member
+
+.PHONY: switch-to-member
+switch-to-member: set-profile-to-member login-as-admin
+	@echo "Switching to the namespace $(NAMESPACE_NAME)"
+	@oc project $(NAMESPACE_NAME)
+	@touch $(DEPLOY_DIR)/operator.yaml
+
+.PHONY: clean-all
+clean-all:  clean-gitsource clean-resources
+
+.PHONY: clean-gitsource
+clean-gitsource:
+	@echo "Deleting GitSource Operator"
+	@cat $(DEPLOY_DIR)/operator.yaml | sed 's/REPLACE_IMAGE/$(DOCKER_REGISTRY)\/$(DOCKER_REPOSITORY)\/$(IMAGE_NAME):$(TAG)/' | oc delete -f - || true
+
+.PHONY: clean-crds
+clean-crds:
+	@echo "Deleting CRDs..."
+	@oc delete -f $(DEPLOY_DIR)/crds/saas_v1alpha1_clusterconfig_crd.yaml || true
+	@oc delete -f $(DEPLOY_DIR)/crds/saas_v1alpha1_saasnamespace_crd.yaml || true
+	@oc delete -f $(DEPLOY_DIR)/crds/saas_v1alpha1_saasuser_crd.yaml || true
+
+.PHONY: clean-resources
+clean-resources: clean-crds
+	@echo "Deleting sub resources..."
+	@echo "Deleting Namespace"
+	@oc delete -f $(DEPLOY_DIR)/namespace.yaml || true
+	@echo "Deleting Role"
+	@oc delete -f $(DEPLOY_DIR)/role.yaml || true
+	@echo "Deleting RoleBinding"
+	@oc delete -f $(DEPLOY_DIR)/role_binding.yaml || true
+	@echo "Deleting ServiceAccount"
+	@oc delete -f $(DEPLOY_DIR)/service_account.yaml || true
+
+.PHONY: deploy-operator
+deploy-operator: build build-image deploy-rbac deploy-crds deploy-operator-only
+
+.PHONY: minishift-start
+minishift-start:
+	minishift start --cpus 4 --memory 8GB
+	-eval `minishift docker-env` && oc login -u system:admin
+
+.PHONY: deploy-both
+deploy-both: build build-image switch-to-host deploy-operator-only switch-to-member deploy-operator-only
+
+#.PHONY: deploy-all
+#deploy-all: clean-gitsource clean-resources create-resources deps prebuild-check deploy-gitsource

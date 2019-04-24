@@ -1,0 +1,20 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: saasusers.saas.openshift.io
+spec:
+  group: saas.openshift.io
+  names:
+    kind: SaasUser
+    listKind: SaasUserList
+    plural: saasusers
+    singular: saasuser
+  scope: Namespaced
+  validation:
+    openAPIV3Schema:
+      properties:
+        targetCluster:
+          type: string
+#        username:
+#          type: string
+  version: v1alpha1
