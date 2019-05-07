@@ -22,6 +22,27 @@ deploy-crds:
 	@oc apply -f $(DEPLOY_DIR)/crds/saas_v1alpha1_saasnamespace_crd.yaml
 	@oc apply -f $(DEPLOY_DIR)/crds/saas_v1alpha1_saasuser_crd.yaml
 
+.PHONY: deploy-workspaces
+deploy-workspaces: login-as-admin
+	@oc new-project operators || true
+	@oc project operators
+	@oc apply -f https://raw.githubusercontent.com/che-incubator/che-workspace-crd-operator/master/deploy/crds/workspace_v1alpha1_workspace_crd.yaml
+	@oc apply -f https://raw.githubusercontent.com/che-incubator/che-workspace-crd-operator/master/deploy/role.yaml
+	@oc apply -f https://raw.githubusercontent.com/che-incubator/che-workspace-crd-operator/master/deploy/role_binding.yaml
+	@oc apply -f https://raw.githubusercontent.com/che-incubator/che-workspace-crd-operator/master/deploy/service_account.yaml
+	@oc apply -f https://raw.githubusercontent.com/che-incubator/che-workspace-crd-operator/master/deploy/controller_config.yaml
+	@oc apply -f $(DEPLOY_DIR)/operator-workspaces.yaml
+
+.PHONY: clean-workspaces
+clean-workspaces:
+	@oc delete -f https://raw.githubusercontent.com/che-incubator/che-workspace-crd-operator/master/deploy/crds/workspace_v1alpha1_workspace_crd.yaml || true
+	@oc delete -f https://raw.githubusercontent.com/che-incubator/che-workspace-crd-operator/master/deploy/role.yaml || true
+	@oc delete -f https://raw.githubusercontent.com/che-incubator/che-workspace-crd-operator/master/deploy/role_binding.yaml || true
+	@oc delete -f https://raw.githubusercontent.com/che-incubator/che-workspace-crd-operator/master/deploy/service_account.yaml || true
+	@oc delete -f https://raw.githubusercontent.com/che-incubator/che-workspace-crd-operator/master/deploy/controller_config.yaml || true
+	@oc delete -f $(DEPLOY_DIR)/operator-workspaces.yaml || true
+	@oc delete namespace operators
+
 .PHONY: login-as-admin
 login-as-admin:
 	@echo "Logging using system:admin..."

@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: che-workspace-crd-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: che-workspace-crd-operator
+  template:
+    metadata:
+      labels:
+        name: che-workspace-crd-operator
+    spec:
+      serviceAccountName: che-workspace-crd-operator
+      containers:
+        - name: che-workspace-crd-operator
+          image: quay.io/che-incubator/che-workspace-crd-controller:latest
+          command:
+          - che-workspace-crd-operator
+          imagePullPolicy: Always
+          env:
+            - name: WATCH_NAMESPACE
+              value: ""
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OPERATOR_NAME
+              value: "che-workspace-crd-operator"
