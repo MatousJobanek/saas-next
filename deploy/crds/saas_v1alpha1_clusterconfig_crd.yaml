@@ -17,11 +17,11 @@ spec:
           properties:
             role:
               type: string
-            address:
+            apiAddress:
               type: string
             host:
               properties:
-                address:
+                apiAddress:
                   type: string
                 secretRef:
                   properties:
@@ -31,7 +31,7 @@ spec:
               type: array
               items:
                 properties:
-                  address:
+                  apiAddress:
                     type: string
                   secretRef:
                     properties:

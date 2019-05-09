@@ -25,7 +25,7 @@ type ClientRegistry struct {
 func (r ClientRegistry) getClusterClient(log logr.Logger, cl client.Client, config saasv1alpha1.SaasClusterConfig) (client.Client, error) {
 	r.mux.Lock()
 	defer r.mux.Unlock()
-	if clusterClient, ok := r.clients[config.Address]; ok {
+	if clusterClient, ok := r.clients[config.ApiAddress]; ok {
 		return clusterClient, nil
 	}
 
@@ -37,29 +37,20 @@ func (r ClientRegistry) getClusterClient(log logr.Logger, cl client.Client, conf
 		return nil, err
 	}
 	token := secret.Data["token"]
-	// todo add cert
-	//ca := secret.Data["ca.crt"]
-	clusterConfig, err := clientcmd.BuildConfigFromFlags(config.Address, "")
+	ca := secret.Data["ca.crt"]
+	clusterConfig, err := clientcmd.BuildConfigFromFlags(config.ApiAddress, "")
 	if err != nil {
 		log.Error(err, "building config failed")
 		return nil, err
 	}
-	// todo add cert instead of insecure
-	//cert, err := base64.StdEncoding.DecodeString(string(ca))
-	//if err != nil {
-	//	log.Error(err, "decodig cert failed")
-	//	return reconcile.Result{}, nil
-	//}
-	//clusterConfig.CAData = cert
+	clusterConfig.CAData = ca
 	clusterConfig.BearerToken = string(token)
-	clusterConfig.Insecure = true
-	clusterConfig.TLSClientConfig.Insecure = true
 
 	clusterClient, err := client.New(clusterConfig, client.Options{})
 	if err != nil {
 		log.Error(err, "building cluster client failed")
 		return nil, err
 	}
-	r.clients[config.Address] = clusterClient
+	r.clients[config.ApiAddress] = clusterClient
 	return clusterClient, nil
 }

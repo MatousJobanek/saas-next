@@ -1,7 +1,0 @@
-apiVersion: saas.openshift.io/v1alpha1
-kind: SaasUser
-metadata:
-  name: example-saasuser
-spec:
-  # Add fields here
-  size: 3

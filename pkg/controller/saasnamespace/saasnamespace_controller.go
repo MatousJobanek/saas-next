@@ -6,7 +6,6 @@ import (
 	"github.com/go-logr/logr"
 	saasv1alpha1 "github.com/redhat-developer/saas-next/pkg/apis/saas/v1alpha1"
 	"github.com/redhat-developer/saas-next/pkg/cluster"
-	"github.com/redhat-developer/saas-next/pkg/controller/clusterconfig"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -147,7 +146,7 @@ func (r *ReconcileSaasNamespace) createSaasNamespace(reqLogger logr.Logger, targ
 }
 
 func (r *ReconcileSaasNamespace) getTargetClient(reqLogger logr.Logger) (client.Client, error) {
-	config, err := clusterconfig.GetLocalClusterConfig(r.client)
+	config, err := cluster.GetLocalClusterConfig(r.client)
 	if err != nil {
 		reqLogger.Error(err, "failed to get local cluster config")
 		return nil, err

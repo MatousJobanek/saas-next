@@ -8,7 +8,6 @@ import (
 	clientuserv1 "github.com/openshift/client-go/user/clientset/versioned/typed/user/v1"
 	saasv1alpha1 "github.com/redhat-developer/saas-next/pkg/apis/saas/v1alpha1"
 	"github.com/redhat-developer/saas-next/pkg/cluster"
-	"github.com/redhat-developer/saas-next/pkg/controller/clusterconfig"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -94,20 +93,20 @@ func (r *ReconcileSaasUser) Reconcile(request reconcile.Request) (reconcile.Resu
 		return reconcile.Result{}, err
 	}
 
-	config, err := clusterconfig.GetLocalClusterConfig(r.client)
+	config, err := cluster.GetLocalClusterConfig(r.client)
 	if err != nil || config == nil {
 		reqLogger.Error(err, "failed to get local cluster config")
 		return reconcile.Result{}, err
 	}
 
-	if config.Spec.Config.Address == instance.Spec.TargetClusterAddress {
+	if config.Spec.Config.ApiAddress == instance.Spec.TargetClusterAddress {
 		err := r.createUser(reqLogger, instance)
 		return reconcile.Result{}, err
 	}
 
 	if config.Spec.Config.Role == saasv1alpha1.Host {
 		for _, member := range config.Spec.Config.Members {
-			if member.Address == instance.Spec.TargetClusterAddress {
+			if member.ApiAddress == instance.Spec.TargetClusterAddress {
 
 				memberClient, err := cluster.GetClusterClient(reqLogger, r.client, member)
 				if err != nil {

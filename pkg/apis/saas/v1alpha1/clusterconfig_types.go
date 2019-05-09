@@ -14,10 +14,10 @@ type ClusterConfigSpec struct {
 }
 
 type SaasClusterRoleConfig struct {
-	Address string              `json:"address"`
-	Role    SaasClusterRole     `json:"role"`
-	Host    SaasClusterConfig   `json:"host,omitempty"`
-	Members []SaasClusterConfig `json:"members,omitempty"`
+	ApiAddress string              `json:"apiAddress"`
+	Role       SaasClusterRole     `json:"role"`
+	Host       SaasClusterConfig   `json:"host,omitempty"`
+	Members    []SaasClusterConfig `json:"members,omitempty"`
 }
 
 type SaasClusterRole string
@@ -26,7 +26,7 @@ const Host SaasClusterRole = "host"
 const Member SaasClusterRole = "member"
 
 type SaasClusterConfig struct {
-	Address string `json:"address"`
+	ApiAddress string `json:"apiAddress"`
 	// SecretRef refers to the secret that contains credentials to access the git repo. Optional.
 	SecretRef *SecretRef `json:"secretRef,omitempty"`
 }

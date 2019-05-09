@@ -5,7 +5,6 @@ import (
 	saasv1alpha1 "github.com/redhat-developer/saas-next/pkg/apis/saas/v1alpha1"
 	"github.com/redhat-developer/saas-next/pkg/cluster"
 	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -71,7 +70,8 @@ func (r *ReconcileClusterConfig) Reconcile(request reconcile.Request) (reconcile
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling ClusterConfig")
 	// Fetch the ClusterConfig config
-	config, err := GetLocalClusterConfig(r.client)
+	cluster.ResetLocalClusterConfig()
+	config, err := cluster.GetLocalClusterConfig(r.client)
 	if err != nil {
 		return reconcile.Result{}, err
 	} else if config == nil {
@@ -94,7 +94,7 @@ func (r *ReconcileClusterConfig) Reconcile(request reconcile.Request) (reconcile
 		}
 		isPresent := false
 		for _, member := range hostConfig.Spec.Config.Members {
-			if member.Address == config.Spec.Config.Address {
+			if member.ApiAddress == config.Spec.Config.ApiAddress {
 				isPresent = true
 				break
 			}
@@ -139,7 +139,7 @@ func (r *ReconcileClusterConfig) Reconcile(request reconcile.Request) (reconcile
 
 			hostConfig.Spec.Config.Members = append(hostConfig.Spec.Config.Members,
 				saasv1alpha1.SaasClusterConfig{
-					Address: config.Spec.Config.Address,
+					ApiAddress: config.Spec.Config.ApiAddress,
 					SecretRef: &saasv1alpha1.SecretRef{
 						Name: tokenToCreate.Name,
 					},
@@ -163,20 +163,4 @@ func isOwnedBy(secret v1.Secret, sa *v1.ServiceAccount) bool {
 		}
 	}
 	return false
-}
-
-func GetLocalClusterConfig(client client.Client) (*saasv1alpha1.ClusterConfig, error) {
-	instance := &saasv1alpha1.ClusterConfig{}
-	err := client.Get(context.TODO(), types.NamespacedName{Namespace: cluster.PlaneNamespaceName, Name: cluster.ConfigClusterName}, instance)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
-			return nil, nil
-		}
-		// Error reading the object - requeue the request.
-		return nil, err
-	}
-	return instance, nil
 }

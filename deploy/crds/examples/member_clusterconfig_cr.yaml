@@ -1,0 +1,13 @@
+apiVersion: saas.openshift.io/v1alpha1
+kind: ClusterConfig
+metadata:
+  name: saas-next-clusterconfig
+  namespace: saas-control-plane
+spec:
+  config:
+    role: member
+    apiAddress: https://192.168.42.24:8443
+    host:
+      apiAddress: https://192.168.42.45:8443
+      secretRef:
+        name: host-sa-saas-next-token
