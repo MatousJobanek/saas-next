@@ -116,7 +116,10 @@ func (r *ReconcileSaasNamespace) Reconcile(request reconcile.Request) (reconcile
 		return reconcile.Result{}, nil
 	}
 	err = r.createSaasNamespace(reqLogger, targetClient, userName, request.Name)
-	return reconcile.Result{}, err
+	if err != nil {
+		reqLogger.Error(err, "failed to create saasnamespace")
+	}
+	return reconcile.Result{}, nil
 }
 
 func (r *ReconcileSaasNamespace) createSaasNamespace(reqLogger logr.Logger, targetClient client.Client, userName, namespace string) error {

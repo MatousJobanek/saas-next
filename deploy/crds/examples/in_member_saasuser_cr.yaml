@@ -1,0 +1,7 @@
+apiVersion: saas.openshift.io/v1alpha1
+kind: SaasUser
+metadata:
+  name: john-in-member
+spec:
+  targetCluster: https://192.168.42.240:8443
+  approved: true

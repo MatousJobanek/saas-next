@@ -15,6 +15,6 @@ spec:
       properties:
         targetCluster:
           type: string
-#        username:
-#          type: string
+        approved:
+          type: boolean
   version: v1alpha1

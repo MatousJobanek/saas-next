@@ -6,11 +6,13 @@ import (
 	"github.com/go-logr/logr"
 	userv1 "github.com/openshift/api/user/v1"
 	clientuserv1 "github.com/openshift/client-go/user/clientset/versioned/typed/user/v1"
+	errs "github.com/pkg/errors"
 	saasv1alpha1 "github.com/redhat-developer/saas-next/pkg/apis/saas/v1alpha1"
 	"github.com/redhat-developer/saas-next/pkg/cluster"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -92,6 +94,10 @@ func (r *ReconcileSaasUser) Reconcile(request reconcile.Request) (reconcile.Resu
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
+	if !instance.Spec.Approved {
+		reqLogger.Info("the user is not approved - waiting for an approval to be able to provision it")
+		return reconcile.Result{}, nil
+	}
 
 	config, err := cluster.GetLocalClusterConfig(r.client)
 	if err != nil || config == nil {
@@ -158,15 +164,21 @@ func (r *ReconcileSaasUser) createUser(reqLogger logr.Logger, saasUser *saasv1al
 }
 
 func createSaasUser(user *saasv1alpha1.SaasUser, client client.Client) error {
-	u := &saasv1alpha1.SaasUser{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      user.Name,
-			Namespace: user.Namespace,
-		},
-		Spec: saasv1alpha1.SaasUserSpec{
-			//Username:             user.Spec.Username,
-			TargetClusterAddress: user.Spec.TargetClusterAddress,
-		}}
-	return client.Create(context.TODO(), u)
-
+	u := &saasv1alpha1.SaasUser{}
+	err := client.Get(context.TODO(), types.NamespacedName{Namespace: user.Namespace, Name: user.Name}, u)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			u := &saasv1alpha1.SaasUser{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      user.Name,
+					Namespace: user.Namespace,
+				},
+				Spec: saasv1alpha1.SaasUserSpec{
+					TargetClusterAddress: user.Spec.TargetClusterAddress,
+				}}
+			return client.Create(context.TODO(), u)
+		}
+		return errs.Wrapf(err, "failed to check if saasuser already exists")
+	}
+	return nil
 }

@@ -10,7 +10,7 @@ import (
 type SaasUserSpec struct {
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	TargetClusterAddress string `json:"targetCluster,omitempty"`
-	//Username             string `json:"username,omitempty"`
+	Approved             bool   `json:"approved,omitempty"`
 }
 
 // SaasUserStatus defines the observed state of SaasUser
