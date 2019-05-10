@@ -175,6 +175,7 @@ func createSaasUser(user *saasv1alpha1.SaasUser, client client.Client) error {
 				},
 				Spec: saasv1alpha1.SaasUserSpec{
 					TargetClusterAddress: user.Spec.TargetClusterAddress,
+					Approved:             user.Spec.Approved,
 				}}
 			return client.Create(context.TODO(), u)
 		}
