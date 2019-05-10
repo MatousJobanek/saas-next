@@ -114,7 +114,7 @@ func (r *ReconcileSaasUser) Reconcile(request reconcile.Request) (reconcile.Resu
 		for _, member := range config.Spec.Config.Members {
 			if member.ApiAddress == instance.Spec.TargetClusterAddress {
 
-				memberClient, err := cluster.GetClusterClient(reqLogger, r.client, member)
+				memberClient, err := cluster.GetClusterClient(reqLogger, r.client, member, true)
 				if err != nil {
 					reqLogger.Error(err, "member client retrieval failed")
 					return reconcile.Result{}, err

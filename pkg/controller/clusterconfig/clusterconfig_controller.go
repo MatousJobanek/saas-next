@@ -2,6 +2,8 @@ package clusterconfig
 
 import (
 	"context"
+	"fmt"
+	"github.com/go-logr/logr"
 	saasv1alpha1 "github.com/redhat-developer/saas-next/pkg/apis/saas/v1alpha1"
 	"github.com/redhat-developer/saas-next/pkg/cluster"
 	"k8s.io/api/core/v1"
@@ -79,80 +81,141 @@ func (r *ReconcileClusterConfig) Reconcile(request reconcile.Request) (reconcile
 	}
 
 	if config.Spec.Config.Role == saasv1alpha1.Member {
-		host := config.Spec.Config.Host
-		hostClient, err := cluster.GetClusterClient(reqLogger, r.client, host)
-		if err != nil {
-			reqLogger.Error(err, "creating host client failed")
-			return reconcile.Result{}, nil
-		}
+		return r.ReconcileMember(reqLogger, request, config)
+	} else {
+		return r.ReconcileHost(reqLogger, request, config)
+	}
+}
 
-		hostConfig := &saasv1alpha1.ClusterConfig{}
-		err = hostClient.Get(context.TODO(), request.NamespacedName, hostConfig)
-		if err != nil {
-			log.Error(err, "getting host config failed")
-			return reconcile.Result{}, nil
-		}
-		isPresent := false
-		for _, member := range hostConfig.Spec.Config.Members {
-			if member.ApiAddress == config.Spec.Config.ApiAddress {
-				isPresent = true
-				break
-			}
-		}
-		if !isPresent {
-			sa := &v1.ServiceAccount{}
-			err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: cluster.PlaneNamespaceName, Name: cluster.ServiceAccountName}, sa)
+func (r *ReconcileClusterConfig) ReconcileHost(log logr.Logger, request reconcile.Request, config *saasv1alpha1.ClusterConfig) (reconcile.Result, error) {
+	for i := 0; i < len(config.Spec.Config.Members); i++ {
+		member := config.Spec.Config.Members[i]
+		if member.State == saasv1alpha1.Unbound || member.State == "" {
+			memberClient, err := cluster.GetClusterClient(log, r.client, member, false)
 			if err != nil {
-				reqLogger.Error(err, "getting local SA failed")
+				log.Error(err, "creating member client failed")
 				return reconcile.Result{}, nil
 			}
-
-			saTokenList := &v1.SecretList{}
-			err = r.client.List(context.TODO(), &client.ListOptions{Namespace: cluster.PlaneNamespaceName}, saTokenList)
+			memberConfig := &saasv1alpha1.ClusterConfig{}
+			configNsdName := types.NamespacedName{Namespace: cluster.PlaneNamespaceName, Name: cluster.ConfigClusterName}
+			err = memberClient.Get(context.TODO(), configNsdName, memberConfig)
 			if err != nil {
-				reqLogger.Error(err, "getting local SA secret list failed")
+				log.Error(err, "geting cluster config from member failed")
 				return reconcile.Result{}, nil
 			}
-			var saToken *v1.Secret
-			for _, secret := range saTokenList.Items {
-				if isOwnedBy(secret, sa) && secret.Type == v1.SecretTypeServiceAccountToken {
-					saToken = &secret
+			if memberConfig.Spec.Config.Host.ApiAddress == config.Spec.Config.ApiAddress {
+				memberConfig.Spec.Config.Host.State = saasv1alpha1.BoundAsynchronized
+				err := memberClient.Update(context.TODO(), memberConfig)
+				if err != nil {
+					log.Error(err, "updating cluster config in member failed")
+					return reconcile.Result{}, nil
 				}
-			}
-			if saToken == nil {
-				reqLogger.Error(err, "local SA secret not found")
-				return reconcile.Result{}, nil
-			}
-
-			tokenToCreate := &v1.Secret{
-				Data:       saToken.Data,
-				StringData: saToken.StringData,
-			}
-			tokenToCreate.Namespace = cluster.PlaneNamespaceName
-			tokenToCreate.GenerateName = cluster.SaSecretMemberPrefix
-
-			err = hostClient.Create(context.TODO(), tokenToCreate)
-			if err != nil {
-				reqLogger.Error(err, "creating member SA secret in host failed")
-				return reconcile.Result{}, nil
-			}
-
-			hostConfig.Spec.Config.Members = append(hostConfig.Spec.Config.Members,
-				saasv1alpha1.SaasClusterConfig{
-					ApiAddress: config.Spec.Config.ApiAddress,
-					SecretRef: &saasv1alpha1.SecretRef{
-						Name: tokenToCreate.Name,
-					},
-				})
-
-			err = hostClient.Update(context.TODO(), hostConfig)
-			if err != nil {
-				reqLogger.Error(err, "updating host config failed")
+				config.Spec.Config.Members[i].State = saasv1alpha1.Bound
+				err = r.client.Update(context.TODO(), config)
+				if err != nil {
+					log.Error(err, "updating local cluster config in host failed")
+					return reconcile.Result{}, nil
+				}
+			} else {
+				log.Error(fmt.Errorf("wrong host %s", memberConfig.Spec.Config.Host.ApiAddress), "the host in member doesn't match")
 				return reconcile.Result{}, nil
 			}
 		}
 	}
+	return reconcile.Result{}, nil
+}
 
+func (r *ReconcileClusterConfig) ReconcileMember(log logr.Logger, request reconcile.Request, config *saasv1alpha1.ClusterConfig) (reconcile.Result, error) {
+	if config.Spec.Config.Host.State == saasv1alpha1.Bound {
+		return reconcile.Result{}, nil
+	}
+	if config.Spec.Config.Host.State == saasv1alpha1.BoundAsynchronized {
+		return r.SynchronizeMember(log, request, config)
+	}
+
+	host := config.Spec.Config.Host
+	hostClient, err := cluster.GetClusterClient(log, r.client, host, false)
+	if err != nil {
+		log.Error(err, "creating host client failed")
+		return reconcile.Result{}, nil
+	}
+
+	hostConfig := &saasv1alpha1.ClusterConfig{}
+	err = hostClient.Get(context.TODO(), request.NamespacedName, hostConfig)
+	if err != nil {
+		log.Error(err, "getting host config failed")
+		return reconcile.Result{}, nil
+	}
+	isPresent := false
+	for _, member := range hostConfig.Spec.Config.Members {
+		if member.ApiAddress == config.Spec.Config.ApiAddress {
+			isPresent = true
+			break
+		}
+	}
+	if !isPresent {
+		sa := &v1.ServiceAccount{}
+		err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: cluster.PlaneNamespaceName, Name: cluster.ServiceAccountName}, sa)
+		if err != nil {
+			log.Error(err, "getting local SA failed")
+			return reconcile.Result{}, nil
+		}
+
+		saTokenList := &v1.SecretList{}
+		err = r.client.List(context.TODO(), &client.ListOptions{Namespace: cluster.PlaneNamespaceName}, saTokenList)
+		if err != nil {
+			log.Error(err, "getting local SA secret list failed")
+			return reconcile.Result{}, nil
+		}
+		var saToken *v1.Secret
+		for _, secret := range saTokenList.Items {
+			if isOwnedBy(secret, sa) && secret.Type == v1.SecretTypeServiceAccountToken {
+				saToken = &secret
+			}
+		}
+		if saToken == nil {
+			log.Error(err, "local SA secret not found")
+			return reconcile.Result{}, nil
+		}
+
+		tokenToCreate := &v1.Secret{
+			Data:       saToken.Data,
+			StringData: saToken.StringData,
+		}
+		tokenToCreate.Namespace = cluster.PlaneNamespaceName
+		tokenToCreate.GenerateName = cluster.SaSecretMemberPrefix
+
+		err = hostClient.Create(context.TODO(), tokenToCreate)
+		if err != nil {
+			log.Error(err, "creating member SA secret in host failed")
+			return reconcile.Result{}, nil
+		}
+
+		hostConfig.Spec.Config.Members = append(hostConfig.Spec.Config.Members,
+			saasv1alpha1.SaasClusterConfig{
+				ApiAddress: config.Spec.Config.ApiAddress,
+				SecretRef: &saasv1alpha1.SecretRef{
+					Name: tokenToCreate.Name,
+				},
+				State: saasv1alpha1.Unbound,
+			})
+
+		err = hostClient.Update(context.TODO(), hostConfig)
+		if err != nil {
+			log.Error(err, "updating host config failed")
+			return reconcile.Result{}, nil
+		}
+	}
+	return reconcile.Result{}, nil
+}
+
+func (r *ReconcileClusterConfig) SynchronizeMember(log logr.Logger, request reconcile.Request, config *saasv1alpha1.ClusterConfig) (reconcile.Result, error) {
+	// todo synchronize all CRs
+	config.Spec.Config.Host.State = saasv1alpha1.Bound
+	err := r.client.Update(context.TODO(), config)
+	if err != nil {
+		log.Error(err, "updating local member config failed")
+	}
 	return reconcile.Result{}, nil
 }
 

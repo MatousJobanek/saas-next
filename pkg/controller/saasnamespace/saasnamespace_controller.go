@@ -161,7 +161,7 @@ func (r *ReconcileSaasNamespace) getTargetClient(reqLogger logr.Logger) (client.
 
 	targetClient := r.client
 	if config.Spec.Config.Role != saasv1alpha1.Host {
-		targetClient, err = cluster.GetClusterClient(reqLogger, r.client, config.Spec.Config.Host)
+		targetClient, err = cluster.GetClusterClient(reqLogger, r.client, config.Spec.Config.Host, true)
 		if err != nil {
 			reqLogger.Error(err, "failed to create host client")
 			return nil, err

@@ -28,8 +28,17 @@ const Member SaasClusterRole = "member"
 type SaasClusterConfig struct {
 	ApiAddress string `json:"apiAddress"`
 	// SecretRef refers to the secret that contains credentials to access the git repo. Optional.
-	SecretRef *SecretRef `json:"secretRef,omitempty"`
+	SecretRef *SecretRef   `json:"secretRef,omitempty"`
+	State     ClusterState `json:"state,omitempty"`
 }
+
+type ClusterState string
+
+const (
+	Unbound            ClusterState = "unbound"
+	Bound              ClusterState = "bound"
+	BoundAsynchronized ClusterState = "bound-asynchronized"
+)
 
 // SecretRef holds information about the secret that contains credentials to access the git repo
 type SecretRef struct {

@@ -23,6 +23,8 @@ spec:
               properties:
                 apiAddress:
                   type: string
+                state:
+                  type: string
                 secretRef:
                   properties:
                     name:
@@ -32,6 +34,8 @@ spec:
               items:
                 properties:
                   apiAddress:
+                    type: string
+                  state:
                     type: string
                   secretRef:
                     properties:
