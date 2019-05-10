@@ -123,8 +123,8 @@ func (r *ReconcileSaasNamespace) Reconcile(request reconcile.Request) (reconcile
 }
 
 func (r *ReconcileSaasNamespace) createSaasNamespace(reqLogger logr.Logger, targetClient client.Client, userName, namespace string) error {
-	// todo solve conflicts
-	name := fmt.Sprintf("%s-%s", userName, namespace)
+	// todo solve conflicts or add to saasuser
+	name := fmt.Sprintf("%s--%s", userName, namespace)
 
 	saasNs := &saasv1alpha1.SaasNamespace{}
 	namespacedName := types.NamespacedName{Namespace: cluster.PlaneNamespaceName, Name: name}
